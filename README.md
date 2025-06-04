@@ -1,7 +1,7 @@
 # PyLexSyn
 
 ## Overview
-This code uses Lexical and Syntax Analysis to define a language (Python). It takes a source file, generates a Tokens and Symbols Table, then checks grammar for error.
+This is a parser that takes a source file and performs lexical analysis (breaks code into individual tokens such as keywords and identifiers), and syntax analysis which checks the syntax of the code. It reports both lexical and syntax errors found within the code.
 
 ## Defined Grammar
 The following language constructs are supported:
