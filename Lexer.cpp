@@ -5,7 +5,7 @@
 // Constructor
 Lexer::Lexer(const std::string& code, ErrorHandler& handler)
     : sourceCode(code), currentIndex(0), currentLine(1), currentCol(1), errorHandler(handler) {
-    // Initialize keywords for Python
+    // Initialize keywords
     keywords["if"] = TokenType::IF;
     keywords["else"] = TokenType::ELSE;
     keywords["elif"] = TokenType::ELIF; 
@@ -199,7 +199,7 @@ std::vector<Token> Lexer::tokenize() {
         tokens.push_back(token);
     }
 
-    tokens.emplace_back(TokenType::END_OF_FILE, "EOF", currentLine, currentCol); // Add EOF token
+    tokens.emplace_back(TokenType::END_OF_FILE, "EOF", currentLine, currentCol); // Add EOF (end of file) token
     return tokens;
 }
 

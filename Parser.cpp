@@ -7,11 +7,11 @@ Token Parser::currentToken() const {
     if (currentTokenIndex < tokens.size()) {
         return tokens[currentTokenIndex];
     }
-    // Return an EOF token if we're past the end
+    // Return an EOF (end of file) token if we're past the end
     return Token(TokenType::END_OF_FILE, "EOF", tokens.back().lineNumber, tokens.back().columnNumber);
 }
 
-// Peeks at the next token without consuming
+// Peeks at the next token without consuming and moving on
 Token Parser::peekNextToken() const {
     if (currentTokenIndex + 1 < tokens.size()) {
         return tokens[currentTokenIndex + 1];
@@ -26,8 +26,6 @@ Token Parser::consume(TokenType expectedType) {
         currentTokenIndex++;
         return current;
     } else {
-        // Prepare a string representation of the expected type for the error message.
-        // This would ideally be a helper function or a map in a real project.
         std::string expectedTypeName;
         switch (expectedType) {
             case TokenType::IDENTIFIER: expectedTypeName = "IDENTIFIER"; break;
@@ -61,16 +59,14 @@ Token Parser::consume(TokenType expectedType) {
             case TokenType::FLOAT_LITERAL: expectedTypeName = "FLOAT_LITERAL"; break;
             case TokenType::STRING_LITERAL: expectedTypeName = "STRING_LITERAL"; break;
             case TokenType::BOOLEAN_LITERAL: expectedTypeName = "BOOLEAN_LITERAL"; break;
-            // Add more cases for all TokenType enums for better error messages
+            // can add more cases
             default: expectedTypeName = "UNKNOWN_EXPECTED_TYPE"; break;
         }
 
         syntaxError("Expected " + expectedTypeName +
                     " but found '" + current.lexeme + "' (type: " +
                     std::to_string(static_cast<int>(current.type)) + ")");
-        // Attempt rudimentary error recovery by advancing
-        // (More sophisticated recovery needed for robust parser)
-        currentTokenIndex++; // Advance past the erroneous token
+        currentTokenIndex++; // Advance past the error token
         return Token(TokenType::UNKNOWN, "ERROR", current.lineNumber, current.columnNumber); // Return an error token
     }
 }
@@ -80,10 +76,10 @@ bool Parser::match(TokenType expectedType) {
     return currentToken().type == expectedType;
 }
 
-// Rudimentary error synchronization
+
+// Skip tokens until a likely statement boundary is found.
+// This attempts to find a token that typically starts a new statement.
 void Parser::synchronize() {
-    // Skip tokens until a likely statement boundary is found.
-    // This attempts to find a token that typically starts a new statement.
     while (currentToken().type != TokenType::END_OF_FILE) {
         switch (currentToken().type) {
             case TokenType::IF:
@@ -91,8 +87,8 @@ void Parser::synchronize() {
             case TokenType::FOR:
             case TokenType::PRINT:
             case TokenType::INPUT:
-            case TokenType::IDENTIFIER: // Could be assignment or function call
-                return; // Found a likely start of a new statement
+            case TokenType::IDENTIFIER: 
+                return;
             default:
                 // Skip the current token and check the next one
                 currentTokenIndex++;
@@ -106,11 +102,11 @@ void Parser::syntaxError(const std::string& message) {
     errorHandler.reportError(message, currentToken().lineNumber, currentToken().columnNumber, "Syntax");
 }
 
-// --- Constructor ---
+// Constructor
 Parser::Parser(const std::vector<Token>& tokens, SymbolTable& symTab, ErrorHandler& errHandler)
     : tokens(tokens), currentTokenIndex(0), symbolTable(symTab), errorHandler(errHandler) {}
 
-// --- Main Parsing Entry Point ---
+// Main Parsin
 void Parser::parse() {
     std::cout << "\nStarting syntax analysis..." << std::endl;
     parseProgram();
@@ -121,31 +117,24 @@ void Parser::parse() {
     }
 }
 
-// --- Grammar Rule Implementations ---
+// GRAMMAR RULE IMPLEMENTATION
 
-// Program -> (Statement NEWLINE)* EOF
-// Note: Python uses newlines to separate statements. For simplification,
-// we'll assume a newline or EOF signifies the end of a statement.
+// Python uses newline to separate statements. For simplification, we will assume a newline or EOF signifies an end of a statement.
 void Parser::parseProgram() {
     while (currentToken().type != TokenType::END_OF_FILE && !errorHandler.hasErrors()) {
         parseStatement();
         // After parsing a statement, consume any trailing newlines.
-        // In a real Python parser, you'd manage indentation here.
-        // For simplicity, we'll just consume newlines.
+        // Indentation is currently not yet handled
         while (match(TokenType::END_OF_FILE) == false && tokens[currentTokenIndex].lexeme == "\n") {
             currentTokenIndex++; // Consume newline
-            // Also reset column to 1 if we actually consume a newline.
-            // This would be better handled by the Lexer during tokenization,
-            // but for simple cases, we can adjust.
-            // In a production lexer, newline would simply increment line and reset column.
         }
     }
 }
 
-// Statement -> DeclarativeStatement | AssignmentStatement | ArithmeticOperation |
+// Statements: DeclarativeStatement | AssignmentStatement | ArithmeticOperation |
 //              ConditionalStatement | IterativeStatement | PrintStatement | InputStatement
 void Parser::parseStatement() {
-    // Check for each possible statement type based on the lookahead token.
+    // Check for each possible statement type based on the lookahead (peek) token.
     if (match(TokenType::IF)) {
         parseConditionalStatement();
     } else if (match(TokenType::WHILE) || match(TokenType::FOR)) {
@@ -160,8 +149,7 @@ void Parser::parseStatement() {
         if (peekNextToken().type == TokenType::ASSIGN) {
             parseAssignmentStatement();
         } else {
-            // Assume it's an expression statement (like `a + b`, which is valid in Python but results in no action if not assigned)
-            // Or it could be a function call, if you extend your grammar.
+            // Assume it's an expression statement (like "a + b", which is valid)
             parseExpression();
         }
     } else {
@@ -171,17 +159,12 @@ void Parser::parseStatement() {
     }
 }
 
-// DeclarativeStatement (Implicit for Python)
-// In Python, declaration often happens with the first assignment: `x = 10`
-// This function might not be directly called as a rule, but its logic integrated into Assignment.
+// Declaration often happens in initialization for example: x = 10
 void Parser::parseDeclarativeStatement() {
-    // This rule is primarily for conceptual understanding of declaration in Python.
-    // Actual implementation for Python is handled within `parseAssignmentStatement`
-    // by checking if an identifier already exists in the symbol table.
-    // If not found, it implies a new declaration.
+    // This is for understanding the declaration in Python. Actual implementation for Python is handled within parseAssignmentStatement
 }
 
-// AssignmentStatement -> IDENTIFIER '=' Expression
+// AssignmentStatement that uses IDENTIFIER "=" Expression
 void Parser::parseAssignmentStatement() {
     Token identifier = consume(TokenType::IDENTIFIER);
     if (errorHandler.hasErrors()) { synchronize(); return; } // Error recovery
@@ -190,7 +173,7 @@ void Parser::parseAssignmentStatement() {
     if (symbolTable.search(identifier.lexeme) == SymbolTable::SymTabPos::NOT_FOUND) {
         symbolTable.insert(identifier.lexeme, "dynamic", 0, 0, identifier.lineNumber);
     } else {
-        // If already exists, just record usage
+        // If already exists, record usage
         symbolTable.addLineOfUsage(identifier.lexeme, identifier.lineNumber);
     }
 
@@ -205,23 +188,14 @@ void Parser::parseArithmeticOperation() {
     parseExpression();
 }
 
-// ConditionalStatement -> 'if' Expression ':' StatementBlock
-//                        | 'if' Expression ':' StatementBlock 'else' ':' StatementBlock
-//                        | 'if' Expression ':' StatementBlock ('elif' Expression ':' StatementBlock)* [ 'else' ':' StatementBlock ]
-// For simplicity, StatementBlock will be a single parseStatement call.
-// In a real Python parser, you'd handle indentation to define blocks.
 void Parser::parseConditionalStatement() {
     consume(TokenType::IF);
     if (errorHandler.hasErrors()) { synchronize(); return; }
     parseExpression(); // Condition for 'if'
     consume(TokenType::COLON);
     if (errorHandler.hasErrors()) { synchronize(); return; }
-
-    // This is where you would parse an indented block of statements for the 'if' body.
-    // For this simplified parser, we'll assume it's followed by a single statement.
     parseStatement(); // IF body
-
-    // Handle 'elif' chain
+    // Handle 'elif'
     while (match(TokenType::ELIF)) {
         consume(TokenType::ELIF);
         if (errorHandler.hasErrors()) { synchronize(); return; }
@@ -241,9 +215,7 @@ void Parser::parseConditionalStatement() {
     }
 }
 
-// IterativeStatement -> 'while' Expression ':' StatementBlock
-//                    | 'for' IDENTIFIER 'in' IDENTIFIER_OR_RANGE_CALL ':' StatementBlock
-// (Simplified for 'for' loop)
+// IterativeStatement: "while" Expression ":" StatementBlock | "for" IDENTIFIER "in" IDENTIFIER_OR_RANGE_CALL ":" StatementBlock
 void Parser::parseIterativeStatement() {
     if (match(TokenType::WHILE)) {
         consume(TokenType::WHILE);
@@ -258,29 +230,13 @@ void Parser::parseIterativeStatement() {
         Token loopVar = consume(TokenType::IDENTIFIER);
         if (errorHandler.hasErrors()) { synchronize(); return; }
 
-        // Add loop variable to symbol table (scope handling would be needed for real Python)
         if (symbolTable.search(loopVar.lexeme) == SymbolTable::SymTabPos::NOT_FOUND) {
             symbolTable.insert(loopVar.lexeme, "dynamic", 0, 0, loopVar.lineNumber);
         } else {
             symbolTable.addLineOfUsage(loopVar.lexeme, loopVar.lineNumber);
         }
-
-        // For simplicity, let's assume 'in' is supported and then an IDENTIFIER
-        // A real parser would handle `range(...)` or list literals.
-        // You'd need a TokenType::IN if you add 'in' keyword.
-        // Example: `for i in my_list:`
-        // if (match(TokenType::IN)) { // Assuming TokenType::IN exists
-        //     consume(TokenType::IN);
-        //     consume(TokenType::IDENTIFIER); // e.g., 'my_list' or 'range_object'
-        // } else {
-        //    syntaxError("Expected 'in' keyword after loop variable in for statement.");
-        //    synchronize(); return;
-        // }
-        // For the sake of this example, let's just assume `for i:` syntax as an extremely simplified version.
-        // Or if you added a `range` function, you'd parse a function call here.
-        // For now, if no `in` is present, it's an error.
         syntaxError("Simple 'for' loop syntax `for IDENTIFIER in ITERABLE` not fully implemented. Expected 'in' followed by iterable.");
-        synchronize(); // Basic error recovery
+        synchronize(); // Basic error recovery to advance
 
         consume(TokenType::COLON);
         if (errorHandler.hasErrors()) { synchronize(); return; }
@@ -292,7 +248,7 @@ void Parser::parseIterativeStatement() {
     }
 }
 
-// Expression -> Comparison (('and' | 'or') Comparison)*
+// Expression: Comparison (("and" | "or") Comparison)*
 void Parser::parseExpression() {
     parseComparison();
     while (match(TokenType::AND) || match(TokenType::OR)) {
@@ -301,7 +257,7 @@ void Parser::parseExpression() {
     }
 }
 
-// Comparison -> ArithmeticExpression ( ('==' | '!=' | '<' | '<=' | '>' | '>=') ArithmeticExpression )*
+// Comparison: ArithmeticExpression ( ("==" | "!=" | "<" | "<=" | ">" | ">=") ArithmeticExpression )*
 void Parser::parseComparison() {
     parseArithmeticExpression();
     while (match(TokenType::EQUAL_EQUAL) || match(TokenType::NOT_EQUAL) ||
@@ -312,27 +268,27 @@ void Parser::parseComparison() {
     }
 }
 
-// ArithmeticExpression -> Term ( ('+' | '-') Term )*
+// ArithmeticExpression: Term ( ("+" | "-") Term )*
 void Parser::parseArithmeticExpression() {
     parseTerm();
     while (match(TokenType::PLUS) || match(TokenType::MINUS)) {
-        consume(currentToken().type); // Consume '+' or '-'
+        consume(currentToken().type); // Consume "+" or "-"
         parseTerm();
     }
 }
 
-// Term -> Factor ( ('*' | '/' | '%') Factor )*
+// Term: Factor ( ("*" | "/" | "%") Factor )*
 void Parser::parseTerm() {
     parseFactor();
     while (match(TokenType::MULTIPLY) || match(TokenType::DIVIDE) || match(TokenType::MODULO)) {
-        consume(currentToken().type); // Consume '*', '/', or '%'
+        consume(currentToken().type); // Consume "*", "/", or "%"
         parseFactor();
     }
 }
 
-// Factor -> ('+' | '-')* (INTEGER_LITERAL | FLOAT_LITERAL | STRING_LITERAL | BOOLEAN_LITERAL | IDENTIFIER | '(' Expression ')' | 'input' '(' [STRING_LITERAL] ')')
+// Factor: ("+" | "-"")* (INTEGER_LITERAL | FLOAT_LITERAL | STRING_LITERAL | BOOLEAN_LITERAL | IDENTIFIER | "(" Expression ")" | "input" "(" [STRING_LITERAL] ")")
 void Parser::parseFactor() {
-    // Handle unary plus/minus/not
+    // Handle plus/minus/not
     if (match(TokenType::PLUS) || match(TokenType::MINUS) || match(TokenType::NOT)) {
         consume(currentToken().type);
     }
@@ -351,7 +307,7 @@ void Parser::parseFactor() {
     } else if (match(TokenType::LPAREN)) {
         consume(TokenType::LPAREN);
         if (errorHandler.hasErrors()) { synchronize(); return; }
-        parseExpression(); // Recursively parse the expression inside parentheses
+        parseExpression();
         consume(TokenType::RPAREN);
         if (errorHandler.hasErrors()) { synchronize(); return; }
     }
@@ -373,7 +329,7 @@ void Parser::parseFactor() {
     }
 }
 
-// PrintStatement -> 'print' '(' Expression ')'
+// PrintStatement: "print" "(" Expression ")"
 void Parser::parsePrintStatement() {
     consume(TokenType::PRINT);
     if (errorHandler.hasErrors()) { synchronize(); return; }
@@ -384,7 +340,7 @@ void Parser::parsePrintStatement() {
     if (errorHandler.hasErrors()) { synchronize(); return; }
 }
 
-// InputStatement -> 'input' '(' [STRING_LITERAL] ')'
+// InputStatement: "input" "(" [STRING_LITERAL] ")"
 void Parser::parseInputStatement() {
     consume(TokenType::INPUT);
     if (errorHandler.hasErrors()) { synchronize(); return; }
